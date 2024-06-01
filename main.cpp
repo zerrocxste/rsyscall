@@ -150,17 +150,55 @@ int get_pid(const char *process)
 
 long remote_mmap(int pid, void *address, size_t len)
 {
-    constexpr int MAX_TRY_COUNT = 250;
+    constexpr int MAX_TRY_COUNT = 10000;
 
+    int fd;
     char buffer[4096]{};
     int sysnr{};
+    std::uintptr_t regs[8];
     std::uintptr_t rsp, rip;
     unsigned char backup[sizeof(code)];
 
     kill(pid, SIGSTOP);
 
+    sprintf(buffer, "/proc/%d/stat", pid);
+
+    int try_count = 0;
+    while (try_count < MAX_TRY_COUNT)
+    {
+        auto is_paused = [&]()
+        {
+            fd = open(buffer, O_RDONLY);
+
+            char temp[1024]{};
+            read(fd, temp, sizeof(temp));
+            for (int i = 0, sc = 0; i < 50; i++)
+            {
+                if (temp[i] == ' ' && ++sc == 2)
+                {
+                    if (temp[i + 1] == 'T' || temp[i + 1] == 't')
+                    {
+                        close(fd);
+                        return true;
+                    }
+                }
+            }
+            close(fd);
+            return false;
+        };
+
+        if (is_paused())
+            break;
+
+        try_count++;
+        usleep(1000);
+    }
+
+    if (try_count >= MAX_TRY_COUNT)
+        return -ENOENT;
+
     sprintf(buffer, "/proc/%d/syscall", pid);
-    auto fd = open(buffer, O_RDONLY);
+    fd = open(buffer, O_RDONLY);
     if (fd <= 0)
         return -ESRCH;
 
@@ -169,12 +207,22 @@ long remote_mmap(int pid, void *address, size_t len)
 
     close(fd);
 
-    sscanf(buffer, "%d %lx %lx", &sysnr, &rsp, &rip);
+    sscanf(buffer, "%d %lx %lx %lx %lx %lx %lx %lx %lx",
+           &sysnr,
+           &regs[0], &regs[1], &regs[2], &regs[3], &regs[4], &regs[5], &regs[6], &regs[7]);
+
+    for (int i = (sizeof(regs) / sizeof(regs[0])) - 1; i != -1; i--)
+    {
+        if (regs[i] != 0)
+        {
+            rsp = regs[i - 1];
+            rip = regs[i];
+            break;
+        }
+    }
 
     if (!rsp || !rip)
-    {
         return -EAGAIN;
-    }
 
     sprintf(buffer, "/proc/%d/mem", pid);
     fd = open(buffer, O_RDWR);
@@ -191,41 +239,39 @@ long remote_mmap(int pid, void *address, size_t len)
     write_memory(fd, shell_address, &args, sizeof(args));
 
     kill(pid, SIGCONT);
-    int try_count = 0;
+    try_count = 0;
     while (try_count < MAX_TRY_COUNT)
     {
         unsigned char patch[2]{};
         read_memory(fd, rip, patch, 2);
         if (!memcmp(patch, args.jmp_infinite, 2))
-        {
             break;
-        }
         try_count++;
+        usleep(1000);
     }
 
-    if (try_count >= MAX_TRY_COUNT) {
+    if (try_count >= MAX_TRY_COUNT)
+    {
         close(fd);
         return -EINTR;
     }
 
     read_memory(fd, shell_address, &args, sizeof(args));
     write_memory(fd, rip, backup, sizeof(backup));
-    
+
     close(fd);
     return args.mmap_ret == -100 ? -EIO : args.mmap_ret;
 }
 
-int main(int argc, char ** argv)
+int main(int argc, char **argv)
 {
-    if (argc < 2 || !*argv[1]) {
+    if (argc < 2 || !*argv[1])
+    {
         std::printf("[-] usage: remote_syscall_linux <process>\n");
         return 1;
     }
 
-    std::printf("%s\n", argv[1]);
-
     auto pid = get_pid(argv[1]);
-
     if (pid <= 0)
     {
         std::printf("not founded\n");
@@ -233,9 +279,12 @@ int main(int argc, char ** argv)
     }
 
     auto ret = remote_mmap(pid, 0, 4096);
-    if (ret < 0) {
-        std::printf("[-] failed. error code: %ld", ret);
-    } else {
-        std::printf("[+] success. address: %p\n", ret);
+    if (ret < 0)
+    {
+        std::printf("[-] failed. error code: %ld\n", ret);
+    }
+    else
+    {
+        std::printf("[+] success. address: %p\n", (void *)ret);
     }
 }
