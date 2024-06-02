@@ -211,6 +211,7 @@ long remote_mmap(int pid, void *address, size_t length, int prot, int flags, int
     int fd_syscall, fd_mem;
     char path_stat[4096]{}, path_syscall[4096]{}, path_mem[4096]{};
     unsigned char backup[sizeof(code)];
+    int try_count;
 
     sprintf(path_stat, "/proc/%d/stat", pid);
     sprintf(path_syscall, "/proc/%d/syscall", pid);
@@ -218,7 +219,7 @@ long remote_mmap(int pid, void *address, size_t length, int prot, int flags, int
 
     kill(pid, SIGSTOP);
 
-    int try_count = 0;
+    try_count = 0;
     while (try_count < MAX_TRY_COUNT)
     {
         if (is_process_paused(path_stat))
@@ -261,6 +262,7 @@ long remote_mmap(int pid, void *address, size_t length, int prot, int flags, int
     write_memory(fd_mem, shell_address, &args, sizeof(args));
 
     kill(pid, SIGCONT);
+
     try_count = 0;
     while (try_count < MAX_TRY_COUNT)
     {
@@ -296,7 +298,8 @@ long remote_mmap(int pid, void *address, size_t length, int prot, int flags, int
 
     read_memory(fd_mem, shell_address, &args, sizeof(args));
     write_memory(fd_mem, proc_syscall.rip, backup, sizeof(backup));
-
+    kill(pid, SIGCONT);
+    
     close(fd_syscall);
     close(fd_mem);
     return args.mmap_ret == NOT_INITIALIZED ? -EIO : args.mmap_ret;
@@ -321,8 +324,8 @@ int main(int argc, char **argv)
 
     auto ret = remote_mmap(pid, 0, 4096, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_PRIVATE | MAP_ANON, -1, 0);
 
-    std::printf("[!] execution time: %ld microseconds\n",
-                std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now() - ts).count());
+    std::printf("[!] execution time: %ld ms\n",
+                std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - ts).count());
 
     if (ret < 0)
     {
