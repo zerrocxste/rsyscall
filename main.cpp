@@ -19,7 +19,7 @@ int main(int argc, char **argv)
 {
     if (argc < 2 || !*argv[1])
     {
-        std::printf("[-] usage: remote_syscall_linux <process>\n");
+        std::printf("[-] usage: %s <process>\n", argv[0]);
         return 1;
     }
 
@@ -29,10 +29,14 @@ int main(int argc, char **argv)
         std::printf("not founded\n");
         return 1;
     }
+    std::printf("[+] pid: %d (%s)\n", pid, argv[1]);
+
+    auto address = (void *)strtoull(argv[2], 0, 16);
 
     auto ts = std::chrono::system_clock::now();
 
-    auto ret = remote_syscall::mmap(pid, 0, 4096, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_PRIVATE | MAP_ANON, -1, 0);
+    auto ret = remote_syscall::mmap(
+        pid, address, 4096, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_PRIVATE | MAP_ANON, -1, 0);
 
     std::printf("[!] execution time: %ld ms\n",
                 std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - ts).count());

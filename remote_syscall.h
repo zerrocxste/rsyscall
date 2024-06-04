@@ -243,7 +243,7 @@ namespace remote_syscall
         detail::write_memory(fd_mem, proc_syscall.rip, code, sizeof(code));
 
         detail::shell_args args{};
-        args.addr = 0;
+        args.addr = (long)address;
         args.size = 0x1000;
         args.prot = prot;
         args.flags = flags;
