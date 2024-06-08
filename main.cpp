@@ -16,6 +16,34 @@ int get_pid(const char *process)
                : strtoul(pid_buffer, NULL, 10);
 }
 
+void test_open(int pid)
+{
+    unsigned long ret = remote_syscall::rsyscall(pid, SYS_open, "/home/zerrocxste/test_file", O_RDONLY);
+
+    if (ret < 0)
+    {
+        std::printf("[-] %s error: %lx\n", __func__, ret);
+    }
+    else
+    {
+        std::printf("[+] %s success: %p\n", __func__, (void *)ret);
+    }
+}
+
+void test_mmap(int pid)
+{
+    unsigned long ret = remote_syscall::rsyscall(pid, SYS_mmap, 0, 4096, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_PRIVATE | MAP_ANON, -1, 0);
+
+    if (ret < 0)
+    {
+        std::printf("[-] %s error: %lx\n", __func__, ret);
+    }
+    else
+    {
+        std::printf("[+] %s success: %p\n", __func__, (void *)ret);
+    }
+}
+
 int main(int argc, char **argv)
 {
     int pid = get_pid("hde_test");
@@ -26,16 +54,8 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    unsigned long ret = remote_syscall::rsyscall(pid, SYS_open, "/home/zerrocxste/test_file", O_RDONLY);
+    test_open(pid);
+    test_mmap(pid);
 
-    if (ret < 0)
-    {
-        std::printf("[-] error: %lx\n", ret);
-    }
-    else
-    {
-        std::printf("[+] success: %p\n", (void *)ret);
-    }
-
-    return ret;
+    return 0;
 }
