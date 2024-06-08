@@ -1,5 +1,6 @@
 #include "remote_syscall.h"
 
+#include <sys/syscall.h>
 #include <chrono>
 
 int get_pid(const char *process)
@@ -17,32 +18,24 @@ int get_pid(const char *process)
 
 int main(int argc, char **argv)
 {
-    if (argc < 2 || !*argv[1])
-    {
-        std::printf("[-] usage: %s <process>\n", argv[0]);
-        return 1;
-    }
+    int pid = get_pid("hde_test");
 
-    auto pid = get_pid(argv[1]);
     if (pid <= 0)
     {
-        std::printf("not founded\n");
+        std::printf("tester not found\n");
         return 1;
     }
-    std::printf("[+] pid: %d (%s)\n", pid, argv[1]);
 
-    auto address = (void *)strtoull(argv[2], 0, 16);
-
-    auto ts = std::chrono::system_clock::now();
-
-    auto ret = remote_syscall::mmap(
-        pid, address, 4096, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_PRIVATE | MAP_ANON, -1, 0);
-
-    std::printf("[!] execution time: %ld ms\n",
-                std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - ts).count());
+    unsigned long ret = remote_syscall::rsyscall(pid, SYS_mmap, 0, 4096, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_ANON | MAP_PRIVATE, -1, 0);
 
     if (ret < 0)
-        std::printf("[-] failed. error code: %ld\n", ret);
+    {
+        std::printf("[-] error: %lx\n", ret);
+    }
     else
-        std::printf("[+] success. address: %p\n", (void *)ret);
+    {
+        std::printf("[+] success: %p\n", (void *)ret);
+    }
+
+    return ret;
 }
