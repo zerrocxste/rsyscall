@@ -26,7 +26,7 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    unsigned long ret = remote_syscall::rsyscall(pid, SYS_mmap, 0, 4096, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_ANON | MAP_PRIVATE, -1, 0);
+    unsigned long ret = remote_syscall::rsyscall(pid, SYS_open, "/home/zerrocxste/test_file", O_RDONLY);
 
     if (ret < 0)
     {

@@ -121,7 +121,7 @@ namespace remote_syscall
 #pragma pack(push, 1)
         char *copy_string(char *dst, const char *src)
         {
-            char *ppos = (char *)&dst;
+            char *ppos = dst;
             while (*src)
                 *ppos++ = *src++;
             *ppos = '\0';
@@ -372,46 +372,48 @@ namespace remote_syscall
         detail::packed_args<_Args...> pack{args...};
         detail::rsyscall_args<sizeof(pack)> rsyscall_args{};
         rsyscall_args.syscall_nr = sysnr;
-        if (sizeof...(args) > 0)
+        if constexpr (sizeof...(args) > 0)
         {
             auto &node = pack;
-            rsyscall_args.arg0 = !node.value_is_address
-                                     ? node.value
-                                     : (args_address + ((std::uintptr_t)&rsyscall_args.args_buffer - (std::uintptr_t)&rsyscall_args) + ((std::uintptr_t)&node.value - (std::uintptr_t)&pack));
+            rsyscall_args.arg0 =
+                !node.value_is_address
+                    ? (long)node.value
+                    : args_address + ((std::uintptr_t)&rsyscall_args.args_buffer - (std::uintptr_t)&rsyscall_args) + ((std::uintptr_t)&node.value - (std::uintptr_t)&pack);
         }
-        if (sizeof...(args) > 1)
+        if constexpr (sizeof...(args) > 1)
         {
             auto &node = pack.rest;
-            rsyscall_args.arg1 = !node.value_is_address
-                                     ? node.value
-                                     : (args_address + ((std::uintptr_t)&rsyscall_args.args_buffer - (std::uintptr_t)&rsyscall_args) + ((std::uintptr_t)&node.value - (std::uintptr_t)&pack));
+            rsyscall_args.arg1 =
+                !node.value_is_address
+                    ? (long)node.value
+                    : args_address + ((std::uintptr_t)&rsyscall_args.args_buffer - (std::uintptr_t)&rsyscall_args) + ((std::uintptr_t)&node.value - (std::uintptr_t)&pack);
         }
-        if (sizeof...(args) > 2)
+        if constexpr (sizeof...(args) > 2)
         {
             auto &node = pack.rest.rest;
             rsyscall_args.arg2 = !node.value_is_address
-                                     ? node.value
+                                     ? (long)node.value
                                      : (args_address + ((std::uintptr_t)&rsyscall_args.args_buffer - (std::uintptr_t)&rsyscall_args) + ((std::uintptr_t)&node.value - (std::uintptr_t)&pack));
         }
-        if (sizeof...(args) > 3)
+        if constexpr (sizeof...(args) > 3)
         {
             auto &node = pack.rest.rest.rest;
             rsyscall_args.arg3 = !node.value_is_address
-                                     ? node.value
+                                     ? (long)node.value
                                      : (args_address + ((std::uintptr_t)&rsyscall_args.args_buffer - (std::uintptr_t)&rsyscall_args) + ((std::uintptr_t)&node.value - (std::uintptr_t)&pack));
         }
-        if (sizeof...(args) > 4)
+        if constexpr (sizeof...(args) > 4)
         {
             auto &node = pack.rest.rest.rest.rest;
             rsyscall_args.arg4 = !node.value_is_address
-                                     ? node.value
+                                     ? (long)node.value
                                      : (args_address + ((std::uintptr_t)&rsyscall_args.args_buffer - (std::uintptr_t)&rsyscall_args) + ((std::uintptr_t)&node.value - (std::uintptr_t)&pack));
         }
-        if (sizeof...(args) > 5)
+        if constexpr (sizeof...(args) > 5)
         {
             auto &node = pack.rest.rest.rest.rest.rest;
             rsyscall_args.arg5 = !node.value_is_address
-                                     ? node.value
+                                     ? (long)node.value
                                      : (args_address + ((std::uintptr_t)&rsyscall_args.args_buffer - (std::uintptr_t)&rsyscall_args) + ((std::uintptr_t)&node.value - (std::uintptr_t)&pack));
         }
         rsyscall_args.syscall_ret = NOT_INITIALIZED;
