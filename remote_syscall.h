@@ -367,7 +367,7 @@ namespace remote_syscall
         if (proc_syscall.read_ret < 0)
             return proc_syscall.read_ret;
 
-        std::uintptr_t args_address = proc_syscall.rsp - 16384;
+        std::uintptr_t args_address = proc_syscall.rsp - 0x4000;
 
         detail::packed_args<_Args...> pack{args...};
         detail::rsyscall_args<sizeof(pack)> rsyscall_args{};
