@@ -419,7 +419,7 @@ namespace remote_syscall
 
                 if constexpr (node.is_string)
                 {
-                    auto len = strlen((const char*)store_position);
+                    auto len = strlen((const char *)store_position);
                     std::memcpy(node.p, store_position, len);
                 }
                 else
