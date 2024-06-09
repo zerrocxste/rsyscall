@@ -39,6 +39,11 @@ namespace remote_syscall
     mov rsi, 2
     mov rax, 2        # syscall open
     syscall
+    cmp rax, 0
+    jg 18
+    mov rdi, 0
+    mov rax, 60
+    syscall
     mov r10, rax # save fd
 
     mov rdi, r10
@@ -51,6 +56,10 @@ namespace remote_syscall
     lea rsi, [rsp+0x48] # shell_args::jmp_inifinite
     mov rdx, 2
     mov rax, 1       # syscall write
+    syscall
+
+    mov rdi, r10
+    mov rax, 3
     syscall
 
     add rsp, 0x4000
@@ -67,7 +76,7 @@ namespace remote_syscall
     */
 
     unsigned char code[] = {
-        "\x48\x89\x04\x24"             //     mov [rsp], rax
+        "\x48\x89\x04\x24"             // mov [rsp], rax
         "\x48\x89\x5c\x24\xf8"         //     mov [rsp-0x8], rbx
         "\x48\x89\x4c\x24\xf0"         //     mov [rsp-0x10], rcx
         "\x48\x89\x54\x24\xe8"         //     mov [rsp-0x18], rdx
@@ -90,6 +99,11 @@ namespace remote_syscall
         "\x48\xc7\xc6\x02\x00\x00\x00" //     mov rsi, 2
         "\x48\xc7\xc0\x02\x00\x00\x00" //     mov rax, 2        # syscall open
         "\x0f\x05"                     //     syscall
+        "\x48\x83\xf8\x00"             //     cmp rax, 0
+        "\x7f\x10"                     //     jg 18
+        "\x48\xc7\xc7\x00\x00\x00\x00" //     mov rdi, 0
+        "\x48\xc7\xc0\x3c\x00\x00\x00" //     mov rax, 60
+        "\x0f\x05"                     //     syscall
         "\x49\x89\xc2"                 //     mov r10, rax # save fd
         "\x4c\x89\xd7"                 //     mov rdi, r10
         "\x48\x8b\x74\x24\x40"         //     mov rsi, [rsp+0x40] # shell_args::prologue_shellcode
@@ -100,6 +114,9 @@ namespace remote_syscall
         "\x48\x8d\x74\x24\x48"         //     lea rsi, [rsp+0x48] # shell_args::jmp_inifinite
         "\x48\xc7\xc2\x02\x00\x00\x00" //     mov rdx, 2
         "\x48\xc7\xc0\x01\x00\x00\x00" //     mov rax, 1       # syscall write
+        "\x0f\x05"                     //     syscall
+        "\x4c\x89\xd7"                 //     mov rdi, r10
+        "\x48\xc7\xc0\x03\x00\x00\x00" //     mov rax, 3
         "\x0f\x05"                     //     syscall
         "\x48\x81\xc4\x00\x40\x00\x00" //     add rsp, 0x4000
         "\x4c\x8b\x54\x24\xc0"         //     mov r10, [rsp-0x40]
@@ -355,8 +372,8 @@ namespace remote_syscall
         }
     } // namespace
 
-    template <class... _Args>
-    long rsyscall(int pid, int sysnr, _Args... args)
+    template <int sysnr, class... _Args>
+    long rsyscall(int pid, _Args... args)
     {
         constexpr int NOT_INITIALIZED = -1000;
 
@@ -391,30 +408,34 @@ namespace remote_syscall
         if constexpr (sizeof...(args) > 2)
         {
             auto &node = pack.rest.rest;
-            rsyscall_args.arg2 = !node.value_is_address
-                                     ? (long)node.value
-                                     : (args_address + ((std::uintptr_t)&rsyscall_args.args_buffer - (std::uintptr_t)&rsyscall_args) + ((std::uintptr_t)&node.value - (std::uintptr_t)&pack));
+            rsyscall_args.arg2 =
+                !node.value_is_address
+                    ? (long)node.value
+                    : (args_address + ((std::uintptr_t)&rsyscall_args.args_buffer - (std::uintptr_t)&rsyscall_args) + ((std::uintptr_t)&node.value - (std::uintptr_t)&pack));
         }
         if constexpr (sizeof...(args) > 3)
         {
             auto &node = pack.rest.rest.rest;
-            rsyscall_args.arg3 = !node.value_is_address
-                                     ? (long)node.value
-                                     : (args_address + ((std::uintptr_t)&rsyscall_args.args_buffer - (std::uintptr_t)&rsyscall_args) + ((std::uintptr_t)&node.value - (std::uintptr_t)&pack));
+            rsyscall_args.arg3 =
+                !node.value_is_address
+                    ? (long)node.value
+                    : (args_address + ((std::uintptr_t)&rsyscall_args.args_buffer - (std::uintptr_t)&rsyscall_args) + ((std::uintptr_t)&node.value - (std::uintptr_t)&pack));
         }
         if constexpr (sizeof...(args) > 4)
         {
             auto &node = pack.rest.rest.rest.rest;
-            rsyscall_args.arg4 = !node.value_is_address
-                                     ? (long)node.value
-                                     : (args_address + ((std::uintptr_t)&rsyscall_args.args_buffer - (std::uintptr_t)&rsyscall_args) + ((std::uintptr_t)&node.value - (std::uintptr_t)&pack));
+            rsyscall_args.arg4 =
+                !node.value_is_address
+                    ? (long)node.value
+                    : (args_address + ((std::uintptr_t)&rsyscall_args.args_buffer - (std::uintptr_t)&rsyscall_args) + ((std::uintptr_t)&node.value - (std::uintptr_t)&pack));
         }
         if constexpr (sizeof...(args) > 5)
         {
             auto &node = pack.rest.rest.rest.rest.rest;
-            rsyscall_args.arg5 = !node.value_is_address
-                                     ? (long)node.value
-                                     : (args_address + ((std::uintptr_t)&rsyscall_args.args_buffer - (std::uintptr_t)&rsyscall_args) + ((std::uintptr_t)&node.value - (std::uintptr_t)&pack));
+            rsyscall_args.arg5 =
+                !node.value_is_address
+                    ? (long)node.value
+                    : (args_address + ((std::uintptr_t)&rsyscall_args.args_buffer - (std::uintptr_t)&rsyscall_args) + ((std::uintptr_t)&node.value - (std::uintptr_t)&pack));
         }
         rsyscall_args.syscall_ret = NOT_INITIALIZED;
         rsyscall_args.prologue_shellcode = proc_syscall.rip;

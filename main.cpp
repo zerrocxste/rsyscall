@@ -18,7 +18,7 @@ int get_pid(const char *process)
 
 void test_open(int pid)
 {
-    unsigned long ret = remote_syscall::rsyscall(pid, SYS_open, "/home/zerrocxste/test_file", O_RDONLY);
+    unsigned long ret = remote_syscall::rsyscall<SYS_open>(pid, "/home/zerrocxste/test_file", O_RDONLY);
 
     if (ret < 0)
     {
@@ -32,7 +32,7 @@ void test_open(int pid)
 
 void test_mmap(int pid)
 {
-    unsigned long ret = remote_syscall::rsyscall(pid, SYS_mmap, 0, 4096, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_PRIVATE | MAP_ANON, -1, 0);
+    unsigned long ret = remote_syscall::rsyscall<SYS_mmap>(pid, 0, 4096, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_PRIVATE | MAP_ANON, -1, 0);
 
     if (ret < 0)
     {
