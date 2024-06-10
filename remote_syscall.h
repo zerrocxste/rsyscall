@@ -390,7 +390,7 @@ namespace remote_syscall
     } // namespace
 
     template <std::size_t PackSize, std::size_t TotalNr, std::size_t Nr = 0, class... _Args>
-    void apply_args(detail::packed_args<_Args...> &pack, detail::rsyscall_args<PackSize> &rsyscall_args, std::uintptr_t args_address)
+    void store_args_pointers(detail::packed_args<_Args...> &pack, detail::rsyscall_args<PackSize> &rsyscall_args, std::uintptr_t args_address)
     {
         if constexpr (Nr < TotalNr)
         {
@@ -403,19 +403,19 @@ namespace remote_syscall
             else
                 rsyscall_args.args[Nr] = (long)node.value;
 
-            apply_args<PackSize, TotalNr, Nr + 1>(pack.rest, rsyscall_args, args_address);
+            store_args_pointers<PackSize, TotalNr, Nr + 1>(pack.rest, rsyscall_args, args_address);
         }
     }
 
     template <std::size_t PackSize, std::size_t TotalNr, std::size_t Nr = 0, class... _Args>
-    void store_args(detail::packed_args<_Args...> &pack, detail::rsyscall_args<PackSize> &rsyscall_args, std::uintptr_t args_address)
+    void load_args(detail::packed_args<_Args...> &pack, detail::rsyscall_args<PackSize> &rsyscall_args, std::uintptr_t args_address)
     {
         if constexpr (Nr < TotalNr)
         {
             auto &node = pack;
             if constexpr (node.value_is_address && node.is_writable)
             {
-                auto store_position = rsyscall_args.args_buffer + ((std::uintptr_t)&node.value - (std::uintptr_t)&pack);
+                auto store_position = (void *)((std::uintptr_t)&node.value);
 
                 if constexpr (node.is_string)
                 {
@@ -428,7 +428,7 @@ namespace remote_syscall
                 }
             }
 
-            store_args<PackSize, TotalNr, Nr + 1>(pack.rest, rsyscall_args, args_address);
+            load_args<PackSize, TotalNr, Nr + 1>(pack.rest, rsyscall_args, args_address);
         }
     }
 
@@ -436,6 +436,7 @@ namespace remote_syscall
     long rsyscall(int pid, _Args... args)
     {
         constexpr int NOT_INITIALIZED = -1000;
+        constexpr auto PACK_SIZE = sizeof(detail::packed_args<_Args...>);
 
         char path_syscall[256]{};
         sprintf(path_syscall, "/proc/%d/syscall", pid);
@@ -446,20 +447,20 @@ namespace remote_syscall
 
         std::uintptr_t args_address = proc_syscall.rsp - 0x4000;
 
-        detail::packed_args<_Args...> pack{args...};
-        detail::rsyscall_args<sizeof(pack)> rsyscall_args{};
+        detail::rsyscall_args<PACK_SIZE> rsyscall_args{};
         rsyscall_args.syscall_nr = sysnr;
-        apply_args<sizeof(pack), sizeof...(_Args)>(pack, rsyscall_args, args_address);
         rsyscall_args.syscall_ret = NOT_INITIALIZED;
         rsyscall_args.prologue_shellcode = proc_syscall.rip;
+        auto &pack = (*(detail::packed_args<_Args...> *)rsyscall_args.args_buffer);
+        pack = {args...};
+        store_args_pointers<sizeof(pack), sizeof...(_Args)>(pack, rsyscall_args, args_address);
         std::memcpy((void *)rsyscall_args.args_buffer, (void *)&pack, sizeof(pack));
 
         long ret = detail::patch_process_and_execute(pid, path_syscall, proc_syscall, rsyscall_args, args_address);
         if (ret < 0)
             return ret;
 
-        store_args<sizeof(pack), sizeof...(_Args)>(pack, rsyscall_args, args_address);
-
+        load_args<sizeof(pack), sizeof...(_Args)>(pack, rsyscall_args, args_address);
         return rsyscall_args.syscall_ret == NOT_INITIALIZED ? -EIO : rsyscall_args.syscall_ret;
     }
 } // namespace remote_syscall
