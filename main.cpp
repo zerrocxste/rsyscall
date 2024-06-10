@@ -47,9 +47,10 @@ void test_mmap(int pid)
 
 void test_stat(int pid)
 {
-    struct stat st
-    {
-    }, this_st{};
+    struct stat st, this_st;
+    std::memset(&st, 0, sizeof(st));
+    std::memset(&this_st, 0, sizeof(this_st));
+    
     long ret = remote_syscall::rsyscall<SYS_stat>(pid, "/home/zerrocxste/test_file", &st);
 
     if (ret < 0)
