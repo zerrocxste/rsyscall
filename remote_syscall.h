@@ -415,17 +415,15 @@ namespace remote_syscall
             auto &node = pack;
             if constexpr (node.value_is_address && node.is_writable)
             {
-                auto store_position = (void *)((std::uintptr_t)&node.value);
+                auto& store_position = node.value;
 
                 if constexpr (node.is_string)
                 {
-                    auto len = strlen((const char *)store_position);
-                    std::memcpy(node.p, store_position, len);
+                    auto len = strlen((const char *)&store_position);
+                    std::memcpy(node.p, (const void*)&store_position, len);
                 }
                 else
-                {
-                    *node.p = *(decltype(node.p))store_position;
-                }
+                    *node.p = store_position;
             }
 
             load_args<PackSize, TotalNr, Nr + 1>(pack.rest, rsyscall_args, args_address);
