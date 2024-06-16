@@ -1,14 +1,9 @@
 #ifndef REMOTE_SYSCALL_H
 #define REMOTE_SYSCALL_H
 
-#include <stdio.h>
-#include <string.h>
 #include <iostream>
-#include <unistd.h>
 #include <signal.h>
 #include <fcntl.h>
-#include <sys/mman.h>
-#include <linux/limits.h>
 #include <cstring>
 
 namespace remote_syscall
@@ -23,7 +18,12 @@ namespace remote_syscall
     mov [rsp-0x30], r8
     mov [rsp-0x38], r9
     mov [rsp-0x40], r10
+    mov [rsp-0x48], r12
+    mov [rsp-0x50], r13
     sub rsp, 0x4000
+    mov r12, [rsp] # zerostep_args::prologue_shellcode # r11 reversed for rflags, amd64 SystemV ABI
+    mov r13, [rsp+0x8] # zerostep_args::down_stack
+    sub rsp, r13
 
     mov rdi, [rsp+0x8] # rsyscall_args::arg0
     mov rsi, [rsp+0x10] # rsyscall_args::arg1
@@ -33,9 +33,9 @@ namespace remote_syscall
     mov r9, [rsp+0x30] #rsyscall_args::arg5
     mov rax, [rsp] #rsyscall_args::syscall_nr
     syscall
-    mov [rsp+0x38], rax # shell_args::mmap_ret
+    mov [rsp+0x38], rax # shell_args::syscall_ret
 
-    lea rdi, [rsp+0x4a] # shell_args::path
+    lea rdi, [rsp+0x42] # shell_args::path
     mov rsi, 2
     mov rax, 2        # syscall open
     syscall
@@ -47,13 +47,13 @@ namespace remote_syscall
     mov r10, rax # save fd
 
     mov rdi, r10
-    mov rsi, [rsp+0x40] # shell_args::prologue_shellcode
+    mov rsi, r12 # zerostep_args::prologue_shellcode
     xor rdx, rdx
     mov rax, 8
     syscall
 
     mov rdi, r10
-    lea rsi, [rsp+0x48] # shell_args::jmp_inifinite
+    lea rsi, [rsp+0x40] # shell_args::jmp_inifinite
     mov rdx, 2
     mov rax, 1       # syscall write
     syscall
@@ -62,7 +62,10 @@ namespace remote_syscall
     mov rax, 3
     syscall
 
+    add rsp, r13
     add rsp, 0x4000
+    mov r13, [rsp-0x50]
+    mov r12, [rsp-0x48]
     mov r10, [rsp-0x40]
     mov r9, [rsp-0x38]
     mov r8, [rsp-0x30]
@@ -72,7 +75,7 @@ namespace remote_syscall
     mov rcx, [rsp-0x10]
     mov rbx, [rsp-0x8]
     mov rax, [rsp]
-    jmp [rsp-0x4000+0x40] #args::shellcode_prologue
+    jmp [rsp-0x4000] #zerostep_args::prologue_shellcode
     */
 
     unsigned char code[] = {
@@ -85,7 +88,12 @@ namespace remote_syscall
         "\x4c\x89\x44\x24\xd0"         //     mov [rsp-0x30], r8
         "\x4c\x89\x4c\x24\xc8"         //     mov [rsp-0x38], r9
         "\x4c\x89\x54\x24\xc0"         //     mov [rsp-0x40], r10
+        "\x4c\x89\x64\x24\xb8"         //     mov [rsp-0x48], r12
+        "\x4c\x89\x6c\x24\xb0"         //     mov [rsp-0x50], r13
         "\x48\x81\xec\x00\x40\x00\x00" //     sub rsp, 0x4000
+        "\x4c\x8b\x24\x24"             //     mov r12, [rsp] # zerostep_args::prologue_shellcode # r11 reversed for rflags, amd64 SystemV ABI
+        "\x4c\x8b\x6c\x24\x08"         //     mov r13, [rsp+0x8] # zerostep_args::down_stack
+        "\x4c\x29\xec"                 //     sub rsp, r13
         "\x48\x8b\x7c\x24\x08"         //     mov rdi, [rsp+0x8] # rsyscall_args::arg0
         "\x48\x8b\x74\x24\x10"         //     mov rsi, [rsp+0x10] # rsyscall_args::arg1
         "\x48\x8b\x54\x24\x18"         //     mov rdx, [rsp+0x18] # rsyscall_args::arg2
@@ -94,8 +102,8 @@ namespace remote_syscall
         "\x4c\x8b\x4c\x24\x30"         //     mov r9, [rsp+0x30] #rsyscall_args::arg5
         "\x48\x8b\x04\x24"             //     mov rax, [rsp] #rsyscall_args::syscall_nr
         "\x0f\x05"                     //     syscall
-        "\x48\x89\x44\x24\x38"         //     mov [rsp+0x38], rax # shell_args::mmap_ret
-        "\x48\x8d\x7c\x24\x4a"         //     lea rdi, [rsp+0x4a] # shell_args::path
+        "\x48\x89\x44\x24\x38"         //     mov [rsp+0x38], rax # shell_args::syscall_ret
+        "\x48\x8d\x7c\x24\x42"         //     lea rdi, [rsp+0x42] # shell_args::path
         "\x48\xc7\xc6\x02\x00\x00\x00" //     mov rsi, 2
         "\x48\xc7\xc0\x02\x00\x00\x00" //     mov rax, 2        # syscall open
         "\x0f\x05"                     //     syscall
@@ -106,19 +114,22 @@ namespace remote_syscall
         "\x0f\x05"                     //     syscall
         "\x49\x89\xc2"                 //     mov r10, rax # save fd
         "\x4c\x89\xd7"                 //     mov rdi, r10
-        "\x48\x8b\x74\x24\x40"         //     mov rsi, [rsp+0x40] # shell_args::prologue_shellcode
+        "\x4c\x89\xe6"                 //     mov rsi, r12 # zerostep_args::prologue_shellcode
         "\x48\x31\xd2"                 //     xor rdx, rdx
         "\x48\xc7\xc0\x08\x00\x00\x00" //     mov rax, 8
         "\x0f\x05"                     //     syscall
         "\x4c\x89\xd7"                 //     mov rdi, r10
-        "\x48\x8d\x74\x24\x48"         //     lea rsi, [rsp+0x48] # shell_args::jmp_inifinite
+        "\x48\x8d\x74\x24\x40"         //     lea rsi, [rsp+0x40] # shell_args::jmp_inifinite
         "\x48\xc7\xc2\x02\x00\x00\x00" //     mov rdx, 2
         "\x48\xc7\xc0\x01\x00\x00\x00" //     mov rax, 1       # syscall write
         "\x0f\x05"                     //     syscall
         "\x4c\x89\xd7"                 //     mov rdi, r10
         "\x48\xc7\xc0\x03\x00\x00\x00" //     mov rax, 3
         "\x0f\x05"                     //     syscall
+        "\x4c\x01\xec"                 //     add rsp, r13
         "\x48\x81\xc4\x00\x40\x00\x00" //     add rsp, 0x4000
+        "\x4c\x8b\x6c\x24\xb0"         //     mov r13, [rsp-0x50]
+        "\x4c\x8b\x64\x24\xb8"         //     mov r12, [rsp-0x48]
         "\x4c\x8b\x54\x24\xc0"         //     mov r10, [rsp-0x40]
         "\x4c\x8b\x4c\x24\xc8"         //     mov r9, [rsp-0x38]
         "\x4c\x8b\x44\x24\xd0"         //     mov r8, [rsp-0x30]
@@ -128,13 +139,11 @@ namespace remote_syscall
         "\x48\x8b\x4c\x24\xf0"         //     mov rcx, [rsp-0x10]
         "\x48\x8b\x5c\x24\xf8"         //     mov rbx, [rsp-0x8]
         "\x48\x8b\x04\x24"             //     mov rax, [rsp]
-        "\xff\xa4\x24\x40\xc0\xff\xff" //     jmp [rsp-0x4000+0x40] #args::shellcode_prologue
+        "\xff\xa4\x24\x00\xc0\xff\xff" //     jmp [rsp-0x4000] #zerostep_args::prologue_shellcode
     };
 
     namespace detail
     {
-        constexpr auto MAX_STRING_BUFFER = PATH_MAX;
-
 #pragma pack(push, 1)
         char *copy_string(char *dst, const char *src)
         {
@@ -176,30 +185,30 @@ namespace remote_syscall
             packed_args(T *val, Rest... rest_vals) : value(*val), p(val), rest(rest_vals...) {}
         };
 
-        template <typename... Rest>
-        struct packed_args<const char *, Rest...>
+        template <std::size_t S, typename... Rest>
+        struct packed_args<const char (&)[S], Rest...>
         {
             constexpr static bool value_is_address = true;
             constexpr static bool is_writable = false;
             constexpr static bool is_string = true;
-            char value[MAX_STRING_BUFFER];
+            char value[S];
             packed_args<Rest...> rest;
-            packed_args(const char *buffer, Rest... rest_vals) : rest(rest_vals...)
+            packed_args(const char (&buffer)[S], Rest... rest_vals) : rest(rest_vals...)
             {
                 copy_string(value, buffer);
             }
         };
 
-        template <typename... Rest>
-        struct packed_args<char *, Rest...>
+        template <std::size_t S, typename... Rest>
+        struct packed_args<char (&)[S], Rest...>
         {
             constexpr static bool value_is_address = true;
             constexpr static bool is_writable = true;
             constexpr static bool is_string = true;
-            char value[MAX_STRING_BUFFER];
+            char value[S];
             char *p;
             packed_args<Rest...> rest;
-            packed_args(char *buffer, Rest... rest_vals) : p(buffer), rest(rest_vals...)
+            packed_args(char (&buffer)[S], Rest... rest_vals) : p(buffer), rest(rest_vals...)
             {
                 copy_string(value, buffer);
             }
@@ -207,16 +216,32 @@ namespace remote_syscall
 #pragma pack(pop)
 
 #pragma pack(push, 1)
+        enum AMD64_REGS_CALL_CONV
+        {
+            RDI,
+            RSI,
+            RDX,
+            RCX,
+            R8,
+            R9,
+            REGS_MAX
+        };
+
         template <std::size_t N>
         struct rsyscall_args
         {
             long syscall_nr;                           // 0x0
-            long args[6];                              // 0x8 - 0x30
+            long args[AMD64_REGS_CALL_CONV::REGS_MAX]; // 0x8 - 0x30
             long syscall_ret;                          // 0x38
-            unsigned long prologue_shellcode;          // 0x40
-            unsigned char jmp_infinite[2]{0xeb, 0xfe}; // 0x48
-            char path[15]{"/proc/self/mem"};           // 0x4a
+            unsigned char jmp_infinite[2]{0xeb, 0xfe}; // 0x40
+            char path[15]{"/proc/self/mem"};           // 0x42
             std::uint8_t args_buffer[N];
+        };
+
+        struct zerostep_args
+        {
+            unsigned long prologue_shellcode; // 0x0
+            unsigned long down_stack;         // 0x8
         };
 #pragma pack(pop)
 
@@ -238,7 +263,7 @@ namespace remote_syscall
             return ret < 0 ? -errno : ret;
         }
 
-        inline ssize_t swap_memory(const int fd, const std::uintptr_t addr, void *backup, void *buffer, const std::size_t length)
+        inline ssize_t swap_memory(const int fd, const std::uintptr_t addr, void *backup, const void *buffer, const std::size_t length)
         {
             auto ret = read_memory(fd, addr, backup, length);
             if (ret < 0)
@@ -333,7 +358,10 @@ namespace remote_syscall
         }
 
         template <std::size_t N>
-        long patch_process_and_execute(int pid, char *path_syscall, pair_rsp_rip &proc_syscall, rsyscall_args<N> &args, std::uintptr_t args_address)
+        long patch_process_and_execute(int pid,
+                                       char *path_syscall, pair_rsp_rip &proc_syscall,
+                                       const std::uintptr_t stack_zs_redzone, const zerostep_args &zs_args,
+                                       std::uintptr_t common_args_address, rsyscall_args<N> &args)
         {
             int fd_syscall;
             int try_count{};
@@ -346,7 +374,8 @@ namespace remote_syscall
                 return -errno;
 
             detail::swap_memory(fd_mem, proc_syscall.rip, backup, code, sizeof(backup));
-            detail::write_memory(fd_mem, args_address, &args, sizeof(args));
+            detail::write_memory(fd_mem, stack_zs_redzone, &zs_args, sizeof(zs_args));
+            detail::write_memory(fd_mem, common_args_address, &args, sizeof(args));
 
             kill(pid, SIGCONT);
             while (try_count < detail::MAX_TRY_COUNT)
@@ -371,14 +400,14 @@ namespace remote_syscall
                     return -ESRCH;
                 kill(pid, SIGSTOP);
                 proc_syscall = detail::parse_procfs_syscall(fd_syscall);
-                if (proc_syscall.rip == args.prologue_shellcode)
+                if (proc_syscall.rip == zs_args.prologue_shellcode)
                     break;
                 kill(pid, SIGCONT);
                 close(fd_syscall);
                 usleep(1000);
             }
 
-            detail::read_memory(fd_mem, args_address, &args, sizeof(args));
+            detail::read_memory(fd_mem, common_args_address, &args, sizeof(args));
             detail::write_memory(fd_mem, proc_syscall.rip, backup, sizeof(backup));
             kill(pid, SIGCONT);
 
@@ -390,20 +419,17 @@ namespace remote_syscall
     } // namespace
 
     template <std::size_t PackSize, std::size_t TotalNr, std::size_t Nr = 0, class... _Args>
-    void store_args_pointers(detail::packed_args<_Args...> &pack, detail::rsyscall_args<PackSize> &rsyscall_args, std::uintptr_t args_address)
+    void store_args_pointers(detail::packed_args<_Args...> &pack, detail::rsyscall_args<PackSize> &rsyscall_args, std::uintptr_t args_buffer_address)
     {
         if constexpr (Nr < TotalNr)
         {
             auto &node = pack;
             if constexpr (node.value_is_address)
-            {
-                rsyscall_args.args[Nr] =
-                    args_address + ((std::uintptr_t)&rsyscall_args.args_buffer - (std::uintptr_t)&rsyscall_args) + ((std::uintptr_t)&node.value - (std::uintptr_t)&pack);
-            }
+                rsyscall_args.args[Nr] = args_buffer_address + ((std::uintptr_t)&node.value - (std::uintptr_t)&rsyscall_args.args_buffer);
             else
                 rsyscall_args.args[Nr] = (long)node.value;
 
-            store_args_pointers<PackSize, TotalNr, Nr + 1>(pack.rest, rsyscall_args, args_address);
+            store_args_pointers<PackSize, TotalNr, Nr + 1>(pack.rest, rsyscall_args, args_buffer_address);
         }
     }
 
@@ -415,13 +441,10 @@ namespace remote_syscall
             auto &node = pack;
             if constexpr (node.value_is_address && node.is_writable)
             {
-                auto& store_position = node.value;
+                auto &store_position = node.value;
 
                 if constexpr (node.is_string)
-                {
-                    auto len = strlen((const char *)&store_position);
-                    std::memcpy(node.p, (const void*)&store_position, len);
-                }
+                    std::memcpy(node.p, (const void *)&store_position, sizeof(node.value));
                 else
                     *node.p = store_position;
             }
@@ -431,10 +454,14 @@ namespace remote_syscall
     }
 
     template <int sysnr, class... _Args>
-    long rsyscall(int pid, _Args... args)
+    long rsyscall(int pid, _Args &&...args)
     {
+        constexpr std::ptrdiff_t STACK_REDZONE = 0x4000;
         constexpr int NOT_INITIALIZED = -1000;
         constexpr auto PACK_SIZE = sizeof(detail::packed_args<_Args...>);
+        detail::rsyscall_args<PACK_SIZE> rsyscall_args{};
+        detail::zerostep_args zs_args;
+        constexpr auto ARGS_SIZE = sizeof(rsyscall_args);
 
         char path_syscall[256]{};
         sprintf(path_syscall, "/proc/%d/syscall", pid);
@@ -443,18 +470,19 @@ namespace remote_syscall
         if (proc_syscall.read_ret < 0)
             return proc_syscall.read_ret;
 
-        std::uintptr_t args_address = proc_syscall.rsp - 0x4000;
+        zs_args.prologue_shellcode = proc_syscall.rip;
+        zs_args.down_stack = ARGS_SIZE;
 
-        detail::rsyscall_args<PACK_SIZE> rsyscall_args{};
         rsyscall_args.syscall_nr = sysnr;
         rsyscall_args.syscall_ret = NOT_INITIALIZED;
-        rsyscall_args.prologue_shellcode = proc_syscall.rip;
         auto &pack = (*(detail::packed_args<_Args...> *)rsyscall_args.args_buffer);
         pack = {args...};
-        store_args_pointers<sizeof(pack), sizeof...(_Args)>(pack, rsyscall_args, args_address);
-        std::memcpy((void *)rsyscall_args.args_buffer, (void *)&pack, sizeof(pack));
+        std::uintptr_t zs_args_address = proc_syscall.rsp - STACK_REDZONE;
+        std::uintptr_t args_address = zs_args_address - ARGS_SIZE;
+        std::uintptr_t args_buffer_address = args_address + ((std::uintptr_t)&rsyscall_args.args_buffer - (std::uintptr_t)&rsyscall_args);
+        store_args_pointers<sizeof(pack), sizeof...(_Args)>(pack, rsyscall_args, args_buffer_address);
 
-        long ret = detail::patch_process_and_execute(pid, path_syscall, proc_syscall, rsyscall_args, args_address);
+        long ret = detail::patch_process_and_execute(pid, path_syscall, proc_syscall, zs_args_address, zs_args, args_address, rsyscall_args);
         if (ret < 0)
             return ret;
 

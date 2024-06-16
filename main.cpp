@@ -3,6 +3,8 @@
 #include <sys/syscall.h>
 #include <chrono>
 #include <sys/stat.h>
+#include <linux/limits.h>
+#include <sys/mman.h>
 
 int get_pid(const char *process)
 {
@@ -27,7 +29,7 @@ void test_open(int pid)
     }
     else
     {
-        std::printf("[+] %s success: %ld\n", __func__, (void *)ret);
+        std::printf("[+] %s success: %ld\n", __func__, ret);
     }
 }
 
@@ -50,7 +52,7 @@ void test_stat(int pid)
     struct stat st, this_st;
     std::memset(&st, 0, sizeof(st));
     std::memset(&this_st, 0, sizeof(this_st));
-    
+
     long ret = remote_syscall::rsyscall<SYS_stat>(pid, "/home/zerrocxste/test_file", &st);
 
     if (ret < 0)
