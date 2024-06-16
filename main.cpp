@@ -19,18 +19,37 @@ int get_pid(const char *process)
                : strtoul(pid_buffer, NULL, 10);
 }
 
-void test_open(int pid)
+void test_open_and_read(int pid)
 {
-    unsigned long ret = remote_syscall::rsyscall<SYS_open>(pid, "/home/zerrocxste/test_file", O_RDONLY);
+    const int read_size = 16384;
 
-    if (ret < 0)
+    char buffer_remote[read_size]{'1'};
+    char buffer_this[read_size]{'2'};
+    unsigned long fd_remote = remote_syscall::rsyscall<SYS_open>(pid, "/home/zerrocxste/test_file", O_RDONLY);
+
+    if (fd_remote < 0)
     {
-        std::printf("[-] %s error: %ld\n", __func__, ret);
+        std::printf("[-] %s error: %ld\n", __func__, fd_remote);
+        return;
     }
-    else
+
+    std::printf("[+] %s success: %ld\n", __func__, fd_remote);
+
+    int fd_this = open("/home/zerrocxste/test_file", O_RDONLY);
+
+    long read_ret_remote = remote_syscall::rsyscall<SYS_read>(pid, fd_remote, buffer_remote, read_size);
+    long read_ret_this = read(fd_this, buffer_this, read_size);
+    if (read_ret_remote != read_ret_this)
     {
-        std::printf("[+] %s success: %ld\n", __func__, ret);
+        std::printf("[-] failed. read remote(%ld) this(%ld)\n", read_ret_remote, read_ret_this);
+        return;
     }
+    if (std::memcmp(buffer_remote, buffer_this, sizeof(read_size)) != 0)
+    {
+        std::printf("[-] faied. buffers not equal\n");
+        return;
+    }
+    std::printf("[+] success read %ld\n", read_ret_remote);
 }
 
 void test_mmap(int pid)
@@ -138,7 +157,7 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    test_open(pid);
+    test_open_and_read(pid);
     test_mmap(pid);
     test_stat(pid);
     test_getcwd(pid);

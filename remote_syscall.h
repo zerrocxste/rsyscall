@@ -174,6 +174,28 @@ namespace remote_syscall
         };
 
         template <typename T, typename... Rest>
+        struct packed_args<T &, Rest...>
+        {
+            constexpr static bool value_is_address = false;
+            constexpr static bool is_writable = false;
+            constexpr static bool is_string = false;
+            T value;
+            packed_args<Rest...> rest;
+            packed_args(T &val, Rest... rest_vals) : value(val), rest(rest_vals...) {}
+        };
+
+        template <typename T, typename... Rest>
+        struct packed_args<const T &, Rest...>
+        {
+            constexpr static bool value_is_address = false;
+            constexpr static bool is_writable = false;
+            constexpr static bool is_string = false;
+            T value;
+            packed_args<Rest...> rest;
+            packed_args(const T &val, Rest... rest_vals) : value(val), rest(rest_vals...) {}
+        };
+
+        template <typename T, typename... Rest>
         struct packed_args<T *, Rest...>
         {
             constexpr static bool value_is_address = true;
