@@ -88,8 +88,9 @@ namespace remote_syscall
         "\x4c\x89\x44\x24\xd0"         //     mov [rsp-0x30], r8
         "\x4c\x89\x4c\x24\xc8"         //     mov [rsp-0x38], r9
         "\x4c\x89\x54\x24\xc0"         //     mov [rsp-0x40], r10
-        "\x4c\x89\x64\x24\xb8"         //     mov [rsp-0x48], r12
-        "\x4c\x89\x6c\x24\xb0"         //     mov [rsp-0x50], r13
+        "\x4c\x89\x5c\x24\xb8"         //     mov [rsp-0x48], r11
+        "\x4c\x89\x64\x24\xb0"         //     mov [rsp-0x50], r12
+        "\x4c\x89\x6c\x24\xa8"         //     mov [rsp-0x58], r13
         "\x48\x81\xec\x00\x40\x00\x00" //     sub rsp, 0x4000
         "\x4c\x8b\x24\x24"             //     mov r12, [rsp] # zerostep_args::prologue_shellcode # r11 reversed for rflags, amd64 SystemV ABI
         "\x4c\x8b\x6c\x24\x08"         //     mov r13, [rsp+0x8] # zerostep_args::down_stack
@@ -128,8 +129,9 @@ namespace remote_syscall
         "\x0f\x05"                     //     syscall
         "\x4c\x01\xec"                 //     add rsp, r13
         "\x48\x81\xc4\x00\x40\x00\x00" //     add rsp, 0x4000
-        "\x4c\x8b\x6c\x24\xb0"         //     mov r13, [rsp-0x50]
-        "\x4c\x8b\x64\x24\xb8"         //     mov r12, [rsp-0x48]
+        "\x4c\x8b\x6c\x24\xa8"         //     mov r13, [rsp-0x58]
+        "\x4c\x8b\x64\x24\xb0"         //     mov r12, [rsp-0x50]
+        "\x4c\x8b\x5c\x24\xb8"         //     mov r11, [rsp-0x48]
         "\x4c\x8b\x54\x24\xc0"         //     mov r10, [rsp-0x40]
         "\x4c\x8b\x4c\x24\xc8"         //     mov r9, [rsp-0x38]
         "\x4c\x8b\x44\x24\xd0"         //     mov r8, [rsp-0x30]
