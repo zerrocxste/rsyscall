@@ -240,7 +240,7 @@ namespace remote_syscall
 #pragma pack(pop)
 
 #pragma pack(push, 1)
-        enum AMD64_REGS_CALL_CONV
+        enum AMD64_SYSCALL_ARGS_CONV
         {
             RDI,
             RSI,
@@ -255,7 +255,7 @@ namespace remote_syscall
         struct rsyscall_args
         {
             long syscall_nr;                           // 0x0
-            long args[AMD64_REGS_CALL_CONV::REGS_MAX]; // 0x8 - 0x30
+            long args[AMD64_SYSCALL_ARGS_CONV::REGS_MAX]; // 0x8 - 0x30
             long syscall_ret;                          // 0x38
             unsigned char jmp_infinite[2]{0xeb, 0xfe}; // 0x40
             char path[15]{"/proc/self/mem"};           // 0x42
