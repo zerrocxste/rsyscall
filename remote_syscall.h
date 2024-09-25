@@ -5,6 +5,7 @@
 #include <signal.h>
 #include <fcntl.h>
 #include <cstring>
+#include <sys/wait.h>
 
 namespace remote_syscall
 {
@@ -254,11 +255,11 @@ namespace remote_syscall
         template <std::size_t N>
         struct rsyscall_args
         {
-            long syscall_nr;                           // 0x0
+            long syscall_nr;                              // 0x0
             long args[AMD64_SYSCALL_ARGS_CONV::REGS_MAX]; // 0x8 - 0x30
-            long syscall_ret;                          // 0x38
-            unsigned char jmp_infinite[2]{0xeb, 0xfe}; // 0x40
-            char path[15]{"/proc/self/mem"};           // 0x42
+            long syscall_ret;                             // 0x38
+            unsigned char jmp_infinite[2]{0xeb, 0xfe};    // 0x40
+            char path[15]{"/proc/self/mem"};              // 0x42
             std::uint8_t args_buffer[N];
         };
 
@@ -292,10 +293,7 @@ namespace remote_syscall
             auto ret = read_memory(fd, addr, backup, length);
             if (ret < 0)
                 return ret;
-            ret = write_memory(fd, addr, buffer, length);
-            if (ret < 0)
-                return ret;
-            return 0;
+            return write_memory(fd, addr, buffer, length);
         }
 
         bool is_process_paused(char *path_stat)
@@ -348,13 +346,10 @@ namespace remote_syscall
 
         constexpr int MAX_TRY_COUNT = 10000;
 
-        pair_rsp_rip pause_process(int pid, char *path_syscall)
+        pair_rsp_rip pause_process(int pid, char *path_syscall, char *path_stat)
         {
             int fd_syscall;
             int try_count{};
-            char path_stat[256]{};
-
-            sprintf(path_stat, "/proc/%d/stat", pid);
 
             kill(pid, SIGSTOP);
             while (try_count < MAX_TRY_COUNT)
@@ -383,7 +378,7 @@ namespace remote_syscall
 
         template <std::size_t N>
         long patch_process_and_execute(int pid,
-                                       char *path_syscall, pair_rsp_rip &proc_syscall,
+                                       char *path_syscall, char *path_stat, pair_rsp_rip &proc_syscall,
                                        const std::uintptr_t stack_zs_redzone, const zerostep_args &zs_args,
                                        std::uintptr_t common_args_address, rsyscall_args<N> &args)
         {
@@ -397,9 +392,21 @@ namespace remote_syscall
             if (fd_mem < 0)
                 return -errno;
 
-            detail::swap_memory(fd_mem, proc_syscall.rip, backup, code, sizeof(backup));
-            detail::write_memory(fd_mem, stack_zs_redzone, &zs_args, sizeof(zs_args));
-            detail::write_memory(fd_mem, common_args_address, &args, sizeof(args));
+            if (long ret = detail::swap_memory(fd_mem, proc_syscall.rip, backup, code, sizeof(backup)); ret <= 0)
+            {
+                kill(pid, SIGCONT);
+                return ret;
+            }
+            if (long ret = detail::write_memory(fd_mem, stack_zs_redzone, &zs_args, sizeof(zs_args)); ret <= 0)
+            {
+                kill(pid, SIGCONT);
+                return ret;
+            }
+            if (long ret = detail::write_memory(fd_mem, common_args_address, &args, sizeof(args)); ret <= 0)
+            {
+                kill(pid, SIGCONT);
+                return ret;
+            }
 
             kill(pid, SIGCONT);
             while (try_count < detail::MAX_TRY_COUNT)
@@ -422,17 +429,30 @@ namespace remote_syscall
                 fd_syscall = open(path_syscall, O_RDONLY);
                 if (fd_syscall <= 0)
                     return -ESRCH;
+
                 kill(pid, SIGSTOP);
+                while (!is_process_paused(path_stat))
+                    usleep(1);
+
                 proc_syscall = detail::parse_procfs_syscall(fd_syscall);
                 if (proc_syscall.rip == zs_args.prologue_shellcode)
                     break;
+
                 kill(pid, SIGCONT);
                 close(fd_syscall);
                 usleep(1000);
             }
 
-            detail::read_memory(fd_mem, common_args_address, &args, sizeof(args));
-            detail::write_memory(fd_mem, proc_syscall.rip, backup, sizeof(backup));
+            if (long ret = detail::read_memory(fd_mem, common_args_address, &args, sizeof(args)); ret <= 0)
+            {
+                kill(pid, SIGCONT);
+                return ret;
+            }
+            if (long ret = detail::write_memory(fd_mem, proc_syscall.rip, backup, sizeof(backup)); ret <= 0)
+            {
+                kill(pid, SIGCONT);
+                return ret;
+            }
             kill(pid, SIGCONT);
 
             close(fd_syscall);
@@ -490,7 +510,10 @@ namespace remote_syscall
         char path_syscall[256]{};
         sprintf(path_syscall, "/proc/%d/syscall", pid);
 
-        detail::pair_rsp_rip proc_syscall = detail::pause_process(pid, path_syscall);
+        char path_stat[256]{};
+        sprintf(path_stat, "/proc/%d/stat", pid);
+
+        detail::pair_rsp_rip proc_syscall = detail::pause_process(pid, path_syscall, path_stat);
         if (proc_syscall.read_ret < 0)
             return proc_syscall.read_ret;
 
@@ -506,7 +529,7 @@ namespace remote_syscall
         std::uintptr_t args_buffer_address = args_address + ((std::uintptr_t)&rsyscall_args.args_buffer - (std::uintptr_t)&rsyscall_args);
         store_args_pointers<sizeof(pack), sizeof...(_Args)>(pack, rsyscall_args, args_buffer_address);
 
-        long ret = detail::patch_process_and_execute(pid, path_syscall, proc_syscall, zs_args_address, zs_args, args_address, rsyscall_args);
+        long ret = detail::patch_process_and_execute(pid, path_syscall, path_stat, proc_syscall, zs_args_address, zs_args, args_address, rsyscall_args);
         if (ret < 0)
             return ret;
 
