@@ -10,6 +10,70 @@
 namespace remote_syscall
 {
     /*
+    void intercept_remote_process_shellcode(zerostep_args* args)
+    {
+    READY_SYSCALL:
+        SAVE [rax, rbx, rcx, rdx, rsi, rdi, r8, r9, r10, r12, r13]
+
+        rsp -= 0x4000;
+        r12 = *rsp;
+        r13 = *(long*) ( (u8*) rsp + 0x8 );
+        rsp -= r13;
+
+        ; syscall(rsyscall_args->syscall_nr, rsyscall_args->arg0, rsyscall_args->arg1, rsyscall_args->arg2, rsyscall_args->arg3, rsyscall_args->arg4, rsyscall_args->arg5)
+        rdi = *(long*) ( *(u8*) rsp + 0x8 );     // rdi = rsyscall_args->arg0
+        rsi = *(long*) ( *(u8*) rsp + 0x10 );    // rsi = rsyscall_args->arg1
+        rdx = *(long*) ( *(u8*) rsp + 0x18 );    // rdx = rsyscall_args->arg2
+        r10 = *(long*) ( *(u8*) rsp + 0x20 );    // r10 = rsyscall_args->arg3
+        r8 =  *(long*) ( *(u8*) rsp + 0x28 );    // r8 = rsyscall_args->arg4
+        r9 =  *(long*) ( *(u8*) rsp + 0x30 );    // r9 = rsyscall_args->arg5
+        rax = *(rsp);                            // rax = rsyscall_args->syscall_nr
+        rax = syscall();
+
+        *(long*)( *(u8*) rsp + 0x38 ) = rax;     // rsyscall_args->syscall_ret = rax;
+
+        // SYS_open(rsyscall_args->path, O_RDWR)
+        rdi = (long*) ( *(u8*)rsp + 0x42 );     // rdi = rsyscall_args->path
+        rsi = O_RDWR;                           // 2
+        rax = SYS_open;                         // 2
+        rax = syscall();
+        if (!(rax > 0))
+        {
+            ; SYS_exit(0)
+            rdi = 0;
+            rsi = 60;                           // SYS_exit
+            syscall();
+        }
+        r10 = rax;                              // save fd
+
+        ; SYS_lseek(fd, zerostep_args::prologue_shellcode, SEEK_SET)
+        rdi = r10;                              // fd after open
+        rsi = r12;                              // rsi = zerostep_args::prologue_shellcode;
+        rdx = SEEK_SET;                         // 0
+        rax = SYS_lseek;                        // 8
+        rax = syscall();
+
+        ; SYS_write(fd, rsyscall_args->jmp_inifinite, sizeof(rsyscall_args->jmp_inifinite))
+        rdi = r10;
+        rsi = (long*) ( *(u8*)rsp + 0x40 );     // rsyscall_args->jmp_inifinite;
+        rdx = sizeof(rsyscall_args::jmp_inifinite);
+        rax = SYS_write;
+        rax = syscall();
+
+        ; SYS_close(fd)
+        rdi = r10;                              // fd after open
+        rax = 3;                                // SYS_close
+        rax = syscall();
+
+        rsp += r13;
+        rsp += 0x4000;
+
+        RESTORE [rax, rbx, rcx, rdx, rsi, rdi, r8, r9, r10, r12, r13]
+        jmp *(rsp-0x4000);                      // goto READY_SYSCALL;
+    }
+    */
+
+    /*
     mov [rsp], rax
     mov [rsp-0x8], rbx
     mov [rsp-0x10], rcx
@@ -34,9 +98,9 @@ namespace remote_syscall
     mov r9, [rsp+0x30] #rsyscall_args::arg5
     mov rax, [rsp] #rsyscall_args::syscall_nr
     syscall
-    mov [rsp+0x38], rax # shell_args::syscall_ret
+    mov [rsp+0x38], rax # rsyscall_args::syscall_ret
 
-    lea rdi, [rsp+0x42] # shell_args::path
+    lea rdi, [rsp+0x42] # rsyscall_args::path
     mov rsi, 2
     mov rax, 2        # syscall open
     syscall
@@ -54,7 +118,7 @@ namespace remote_syscall
     syscall
 
     mov rdi, r10
-    lea rsi, [rsp+0x40] # shell_args::jmp_inifinite
+    lea rsi, [rsp+0x40] # rsyscall_args::jmp_inifinite
     mov rdx, 2
     mov rax, 1       # syscall write
     syscall
@@ -80,7 +144,7 @@ namespace remote_syscall
     */
 
     unsigned char code[] = {
-        "\x48\x89\x04\x24"             // mov [rsp], rax
+        "\x48\x89\x04\x24"             //     mov [rsp], rax
         "\x48\x89\x5c\x24\xf8"         //     mov [rsp-0x8], rbx
         "\x48\x89\x4c\x24\xf0"         //     mov [rsp-0x10], rcx
         "\x48\x89\x54\x24\xe8"         //     mov [rsp-0x18], rdx
@@ -104,26 +168,26 @@ namespace remote_syscall
         "\x4c\x8b\x4c\x24\x30"         //     mov r9, [rsp+0x30] #rsyscall_args::arg5
         "\x48\x8b\x04\x24"             //     mov rax, [rsp] #rsyscall_args::syscall_nr
         "\x0f\x05"                     //     syscall
-        "\x48\x89\x44\x24\x38"         //     mov [rsp+0x38], rax # shell_args::syscall_ret
-        "\x48\x8d\x7c\x24\x42"         //     lea rdi, [rsp+0x42] # shell_args::path
+        "\x48\x89\x44\x24\x38"         //     mov [rsp+0x38], rax # rsyscall_args::syscall_ret
+        "\x48\x8d\x7c\x24\x42"         //     lea rdi, [rsp+0x42] # rsyscall_args::path
         "\x48\xc7\xc6\x02\x00\x00\x00" //     mov rsi, 2
         "\x48\xc7\xc0\x02\x00\x00\x00" //     mov rax, 2        # syscall open
         "\x0f\x05"                     //     syscall
         "\x48\x83\xf8\x00"             //     cmp rax, 0
         "\x7f\x10"                     //     jg 18
         "\x48\xc7\xc7\x00\x00\x00\x00" //     mov rdi, 0
-        "\x48\xc7\xc0\x3c\x00\x00\x00" //     mov rax, 60
+        "\x48\xc7\xc0\x3c\x00\x00\x00" //     mov rax, 60       # syscall exit
         "\x0f\x05"                     //     syscall
         "\x49\x89\xc2"                 //     mov r10, rax # save fd
         "\x4c\x89\xd7"                 //     mov rdi, r10
         "\x4c\x89\xe6"                 //     mov rsi, r12 # zerostep_args::prologue_shellcode
         "\x48\x31\xd2"                 //     xor rdx, rdx
-        "\x48\xc7\xc0\x08\x00\x00\x00" //     mov rax, 8
+        "\x48\xc7\xc0\x08\x00\x00\x00" //     mov rax, 8        # syscall lseek
         "\x0f\x05"                     //     syscall
         "\x4c\x89\xd7"                 //     mov rdi, r10
-        "\x48\x8d\x74\x24\x40"         //     lea rsi, [rsp+0x40] # shell_args::jmp_inifinite
+        "\x48\x8d\x74\x24\x40"         //     lea rsi, [rsp+0x40] # rsyscall_args::jmp_inifinite
         "\x48\xc7\xc2\x02\x00\x00\x00" //     mov rdx, 2
-        "\x48\xc7\xc0\x01\x00\x00\x00" //     mov rax, 1       # syscall write
+        "\x48\xc7\xc0\x01\x00\x00\x00" //     mov rax, 1        # syscall write
         "\x0f\x05"                     //     syscall
         "\x4c\x89\xd7"                 //     mov rdi, r10
         "\x48\xc7\xc0\x03\x00\x00\x00" //     mov rax, 3
