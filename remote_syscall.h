@@ -21,19 +21,19 @@ namespace remote_syscall
         rsp -= r13;
 
         ; syscall(rsyscall_args->syscall_nr, rsyscall_args->arg0, rsyscall_args->arg1, rsyscall_args->arg2, rsyscall_args->arg3, rsyscall_args->arg4, rsyscall_args->arg5)
-        rdi = *(long*) ( *(u8*) rsp + 0x8 );     // rdi = rsyscall_args->arg0
-        rsi = *(long*) ( *(u8*) rsp + 0x10 );    // rsi = rsyscall_args->arg1
-        rdx = *(long*) ( *(u8*) rsp + 0x18 );    // rdx = rsyscall_args->arg2
-        r10 = *(long*) ( *(u8*) rsp + 0x20 );    // r10 = rsyscall_args->arg3
-        r8 =  *(long*) ( *(u8*) rsp + 0x28 );    // r8 = rsyscall_args->arg4
-        r9 =  *(long*) ( *(u8*) rsp + 0x30 );    // r9 = rsyscall_args->arg5
+        rdi = *(long*) ( (u8*) rsp + 0x8 );     // rdi = rsyscall_args->arg0
+        rsi = *(long*) ( (u8*) rsp + 0x10 );    // rsi = rsyscall_args->arg1
+        rdx = *(long*) ( (u8*) rsp + 0x18 );    // rdx = rsyscall_args->arg2
+        r10 = *(long*) ( (u8*) rsp + 0x20 );    // r10 = rsyscall_args->arg3
+        r8 =  *(long*) ( (u8*) rsp + 0x28 );    // r8 = rsyscall_args->arg4
+        r9 =  *(long*) ( (u8*) rsp + 0x30 );    // r9 = rsyscall_args->arg5
         rax = *(rsp);                            // rax = rsyscall_args->syscall_nr
         rax = syscall();
 
         *(long*)( *(u8*) rsp + 0x38 ) = rax;     // rsyscall_args->syscall_ret = rax;
 
         // SYS_open(rsyscall_args->path, O_RDWR)
-        rdi = (long*) ( *(u8*)rsp + 0x42 );     // rdi = rsyscall_args->path
+        rdi = (long*) ( (u8*)rsp + 0x42 );     // rdi = rsyscall_args->path
         rsi = O_RDWR;                           // 2
         rax = SYS_open;                         // 2
         rax = syscall();
@@ -55,7 +55,7 @@ namespace remote_syscall
 
         ; SYS_write(fd, rsyscall_args->jmp_inifinite, sizeof(rsyscall_args->jmp_inifinite))
         rdi = r10;
-        rsi = (long*) ( *(u8*)rsp + 0x40 );     // rsyscall_args->jmp_inifinite;
+        rsi = (long*) ( (u8*)rsp + 0x40 );     // rsyscall_args->jmp_inifinite;
         rdx = sizeof(rsyscall_args::jmp_inifinite);
         rax = SYS_write;
         rax = syscall();
