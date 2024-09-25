@@ -16,60 +16,60 @@ namespace remote_syscall
         SAVE [rax, rbx, rcx, rdx, rsi, rdi, r8, r9, r10, r12, r13]
 
         rsp -= 0x4000;
-        r12 = *rsp;
-        r13 = *(long*) ( (u8*) rsp + 0x8 );
+        r12 = *rsp;                             // r12 = args->prologue_shellcode            
+        r13 = *(long*) ( (u8*) rsp + 0x8 );     // r13 = args->down_stack
         rsp -= r13;
 
         ; syscall(rsyscall_args->syscall_nr, rsyscall_args->arg0, rsyscall_args->arg1, rsyscall_args->arg2, rsyscall_args->arg3, rsyscall_args->arg4, rsyscall_args->arg5)
-        rdi = *(long*) ( (u8*) rsp + 0x8 );     // rdi = rsyscall_args->arg0
-        rsi = *(long*) ( (u8*) rsp + 0x10 );    // rsi = rsyscall_args->arg1
-        rdx = *(long*) ( (u8*) rsp + 0x18 );    // rdx = rsyscall_args->arg2
-        r10 = *(long*) ( (u8*) rsp + 0x20 );    // r10 = rsyscall_args->arg3
-        r8 =  *(long*) ( (u8*) rsp + 0x28 );    // r8 = rsyscall_args->arg4
-        r9 =  *(long*) ( (u8*) rsp + 0x30 );    // r9 = rsyscall_args->arg5
+        rdi = *(long*) ( (u8*) rsp + 0x8 );      // rdi = rsyscall_args->arg0
+        rsi = *(long*) ( (u8*) rsp + 0x10 );     // rsi = rsyscall_args->arg1
+        rdx = *(long*) ( (u8*) rsp + 0x18 );     // rdx = rsyscall_args->arg2
+        r10 = *(long*) ( (u8*) rsp + 0x20 );     // r10 = rsyscall_args->arg3
+        r8 =  *(long*) ( (u8*) rsp + 0x28 );     // r8 = rsyscall_args->arg4
+        r9 =  *(long*) ( (u8*) rsp + 0x30 );     // r9 = rsyscall_args->arg5
         rax = *(rsp);                            // rax = rsyscall_args->syscall_nr
         rax = syscall();
 
         *(long*)( *(u8*) rsp + 0x38 ) = rax;     // rsyscall_args->syscall_ret = rax;
 
         // SYS_open(rsyscall_args->path, O_RDWR)
-        rdi = (long*) ( (u8*)rsp + 0x42 );     // rdi = rsyscall_args->path
-        rsi = O_RDWR;                           // 2
-        rax = SYS_open;                         // 2
+        rdi = (long*) ( (u8*)rsp + 0x42 );       // rdi = rsyscall_args->path
+        rsi = O_RDWR;                            // 2
+        rax = SYS_open;                          // 2
         rax = syscall();
         if (!(rax > 0))
         {
             ; SYS_exit(0)
             rdi = 0;
-            rsi = 60;                           // SYS_exit
+            rsi = 60;                            // SYS_exit
             syscall();
         }
-        r10 = rax;                              // save fd
+        r10 = rax;                               // save fd
 
         ; SYS_lseek(fd, zerostep_args::prologue_shellcode, SEEK_SET)
-        rdi = r10;                              // fd after open
-        rsi = r12;                              // rsi = zerostep_args::prologue_shellcode;
-        rdx = SEEK_SET;                         // 0
-        rax = SYS_lseek;                        // 8
+        rdi = r10;                               // fd after open
+        rsi = r12;                               // rsi = zerostep_args::prologue_shellcode;
+        rdx = SEEK_SET;                          // 0
+        rax = SYS_lseek;                         // 8
         rax = syscall();
 
         ; SYS_write(fd, rsyscall_args->jmp_inifinite, sizeof(rsyscall_args->jmp_inifinite))
         rdi = r10;
-        rsi = (long*) ( (u8*)rsp + 0x40 );     // rsyscall_args->jmp_inifinite;
+        rsi = (long*) ( (u8*)rsp + 0x40 );       // rsyscall_args->jmp_inifinite;
         rdx = sizeof(rsyscall_args::jmp_inifinite);
         rax = SYS_write;
         rax = syscall();
 
         ; SYS_close(fd)
-        rdi = r10;                              // fd after open
-        rax = 3;                                // SYS_close
+        rdi = r10;                               // fd after open
+        rax = 3;                                 // SYS_close
         rax = syscall();
 
         rsp += r13;
         rsp += 0x4000;
 
         RESTORE [rax, rbx, rcx, rdx, rsi, rdi, r8, r9, r10, r12, r13]
-        jmp *(rsp-0x4000);                      // goto READY_SYSCALL;
+        jmp *(rsp-0x4000);                       // goto READY_SYSCALL;
     }
     */
 
